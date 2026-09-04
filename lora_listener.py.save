@@ -1,0 +1,93 @@
+import serial
+import sqlite3
+import requests
+from datetime import datetime
+
+# Add Firebase URL to connect to the realtime database
+FIREBASE_URL = "https://battleship-a7d29-default-rtdb.firebaseio.com" 
+
+
+# Create database for packets.db
+db = sqlite3.connect("packets.db")
+
+db.execute("""
+	CREATE TABLE IF NOT EXISTS packets(
+	id INTEGER PRIMARY KEY, 
+	packet_id TEXT, 
+	node TEXT,
+	data TEXT, 
+	timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+	status INT
+	)
+""")
+
+
+# Create database for queued_packets
+#db = sqlite3.connect("queued_packets")
+#
+#db.execute (
+#	CREATE TABLE IF NOT EXISTS queued_packets(
+#	packet_id INTEGER,
+#	source,
+#	destination TEXT,
+#	data TEXT,
+#	timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+#	status TEXT,
+#	)
+#)
+
+ser = serial.Serial('/dev/ttyUSB0', 115200)
+
+status = 0
+
+while True: 
+	line = ser.readline().decode(errors='ignore').strip()
+
+	if line:
+		print("RECIEVED: ", line)
+
+		timestamp = datetime.now().isoformat()
+
+		line = "test"
+
+		if (line == "HTTP OK 200"):
+			status = 1
+			print("Status changed to: ", status)
+
+			# Save locally 
+			# db.execute("INSERT INTO packets (data, timestamp, packet_id, node) VALUES (?, ?, ?, ?)", 
+			db.execute("INSERT INTO packets (data, timestamp, status) VALUES (?, ?, ?)", 
+			(
+				line,
+				timestamp,
+				status,
+				# packet_id,
+				# node
+			)
+		else:
+			status = 0
+			print("Could not send packet")
+			print("Status is ", status, " -> current message is ",  line)
+	)
+
+
+	# Push to firebase
+	payload = {
+		"message": line, 
+		"timestamp": timestamp, 
+		"status": status
+		# "packet_id": packet_id, 
+		# "node": node
+	}
+
+	try:
+		r = requests.post(
+			FIREBASE_URL + "/jetson_packets.json", 
+			json = payload
+		)
+
+		print("Firebase: ", r.status_code)
+
+	except Exception as e:
+		print("Firebase Error:", e)
+
