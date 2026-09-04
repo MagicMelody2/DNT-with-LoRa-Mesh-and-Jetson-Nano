@@ -48,15 +48,15 @@ def upload_packet(packet_db_id, payload):
 
 			db.execute("UPDATE packets SET status = 1, firebase_key = ? WHERE id = ? ", (firebase_key, packet_db_id))
 			db.commit()
-			print(f"Packet {packet_db_id} synced successfully")
+			print(f"[SYNCED] Packet {packet_db_id}")
 			return True
 		else:
-			print(f"Upload failed ({r.status_code}), packet {packet_db_id} remains queued")
+			print(f"[FAILED] HTTP ({r.status_code}), packet {packet_db_id} remains queued")
 			return False
 
 	# Packet stays in queue if there is there is an exception
 	except Exception as e:
-		print("Firebase Error:", e)
+		print("[FAILED] Firebase Error:", e)
 		print(f"Packet {packet_db_id} remains queued")
 		return False
 
@@ -73,6 +73,7 @@ def sync_pending_packets():
 
 	# If there is no unsynced packets, 
 	if not unsynced_packets:
+		print("No packets waiting for sync")
 		return
 
 	# Update user
@@ -100,6 +101,8 @@ def delete_packets(packet_id):
 
 	db.commit()
 
+	printf(f"Deleted packet {packet_id}")
+
 # Delete all packets
 def delete_all_packets():
 
@@ -107,7 +110,8 @@ def delete_all_packets():
 
 	db.execute("DELETE FROM packets WHERE status = 1")
 	db.commit()
-	print("All synced packets delete")
+	print("Deleted all synced packets")
+
 
 
 # Call functions
