@@ -22,7 +22,8 @@ db.execute("""
 	node TEXT,
 	data TEXT,
 	timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-	status INT
+	status INT,
+	firebase_key TEXT
 	)
 """)
 
@@ -42,7 +43,10 @@ def upload_packet(packet_db_id, payload):
 		# If device is connected to wifi, upload the packets and set the status to 1
 		# to show package was synced
 		if r.status_code == 200:
-			db.execute("UPDATE packets SET status = 1 WHERE id = ? ", (packet_db_id))
+
+			firebase_key = r.json()["name"]
+
+			db.execute("UPDATE packets SET status = 1, firebase_key = ? WHERE id = ? ", (firebase_key, packet_db_id))
 			db.commit()
 			print(f"Packet {packet_db_id} synced successfully")
 			return True
@@ -57,7 +61,7 @@ def upload_packet(packet_db_id, payload):
 		return False
 
 
-# 
+# Sync packets
 def sync_pending_packets():
 
 	"""Try to upload one packet to Firebase.Returns True on success."""
@@ -80,7 +84,34 @@ def sync_pending_packets():
 		payload = {"message": data, "timestamp": timestamp}
 		upload_packet(packet_db_id, payload)
 
-# Call function
+# Automatically delete specific packets from Firebase
+def delete_packets(packet_id):
+
+	row = db.execute("SELECT firebase_key FROM packets WHERE id=?",(packet_id,)).fetchone()
+
+	if not row:
+		return
+
+	firebase_key = row[0]
+
+	requests.delete(f"{FIREBASE_URL}/jetson_packets/{firebase_key}.json")
+
+	db.execute("DELETE FROM packets WHERE id=?", (packet_id,))
+
+	db.commit()
+
+# Delete all packets
+def delete_all_packets():
+
+	requests.delete(FIREBASE_URL + "/jetson_packets.json")
+
+	db.execute("DELETE FROM packets WHERE status = 1")
+	db.commit()
+	print("All synced packets delete")
+
+
+# Call functions
+delete_all_packets()
 sync_pending_packets()
 
 # Get connection status from USB webcam
@@ -88,6 +119,7 @@ ser = serial.Serial('/dev/ttyUSB0', 115200)
 
 # Update retry time to current time
 last_retry_time = time.time()
+print("Time", last_retry_time)
 
 while True:
 
@@ -116,12 +148,15 @@ while True:
 		payload = {"message": line, "timestamp": timestamp}
 		upload_packet(packet_db_id, payload)
 
-		# If the current time - the last retry time was longer than a minute
-		# Try to sync packets again to see if connection was found
-		# Update last_retry time to current time
-		if time.time() - last_retry_time >= RETRY_INTERVAL_SECONDS:
-			sync_pending_packets()
-			last_retry_time = time.time()
+	# If the current time - the last retry time was longer than a minute
+	# Try to sync packets again to see if connection was found
+	# Update last_retry time to current time
+	if time.time() - last_retry_time >= RETRY_INTERVAL_SECONDS:
+		sync_pending_packets()
+		last_retry_time = time.time()
+		print("Timer restarted", last_retry_time)
+	# Small pause to not max out a CPU core
+	time.sleep(0.05)
 
-		# Small pause to not max out a CPU core
-		time.sleep(0.05)
+
+
