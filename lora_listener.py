@@ -24,7 +24,7 @@ RETRY_INTERVAL_SECONDS = 60
 # ====================================================================
 
 # Create database for packets.db
-db = sqlite3.connect("pakcets.db")
+db = sqlite3.connect("packets.db")
 
 db.execute("""
 	CREATE TABLE IF NOT EXISTS packets(
@@ -155,7 +155,7 @@ def delete_packets(packet_id):
 
 	db.commit()
 
-	printf(f"Deleted packet {packet_id}")
+	print(f"Deleted packet {packet_id}")
 
 
 # =====================================================================
@@ -223,6 +223,17 @@ while True:
 
 			try:
 				packet = json.loads(json_text)
+
+				# Debug statements
+				print("\n ----- PACKET -----")
+				print("RID: ", packet.get("id"))
+				print("LAT: ", packet.get("lat"))
+				print("LNG: ", packet.get("lng"))
+				print("TME: ", packet.get("time"))
+				print("HOP: ", packet.get("hops"))
+				print("SEQ: ", packet.get("seq"))
+				print("-----------------------")
+
 
 			except Exception as e:
 				print("JSON Error:", e)
@@ -299,25 +310,15 @@ while True:
 			# If the current time - the last retry time was longer than a minute
 			# Try to sync packets again to see if connection was found
 			# Update last_retry time to current time
-			if(
-				 time.time() - last_retry_time >= RETRY_INTERVAL_SECONDS
-			):
-				sync_pending_packets()
-				last_retry_time = time.time()
-				print("Timer restarted:", last_retry_time)
+		if(
+			 time.time() - last_retry_time >= RETRY_INTERVAL_SECONDS
+		):
+			sync_pending_packets()
+			last_retry_time = time.time()
+			print("Timer restarted:", last_retry_time)
 
-			# Debug statements
-			print("/n ----- PACKET -----")
-			print("RID: ", packet.get("id"))
-			print("LAT: ", packet.get("lat"))
-			print("LNG: ", packet.get("lng"))
-			print("TME: ", packet.get("time"))
-			print("HOP: ", packet.get("hopd"))
-			print("SEQ: ", packet.get("seq"))
-			print("-----------------------")
-
-			# Small pause to not max out a CPU core
-			time.sleep(0.05)
+		# Small pause to not max out a CPU core
+		time.sleep(0.05)
 
 	except KeyboardInterrupt:
 		print("Stopping...")
