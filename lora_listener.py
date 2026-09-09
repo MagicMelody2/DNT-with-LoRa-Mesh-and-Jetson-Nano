@@ -6,7 +6,7 @@ import requests
 import time
 import json
 from datetime import datetime
-
+nodes = {}
 
 # =====================================================================
 # CONFIG
@@ -173,6 +173,66 @@ def delete_all_packets():
 	print("Deleted all synced packets")
 
 
+
+# =====================================================================
+# UPDATE ALL NODES
+# ====================================================================
+
+
+def update_node(data):
+
+	rover_id = packet.get("id")
+
+	if not rover_id:
+		return
+
+	nodes[rover_id] = {
+		"lat": packet.get("lat"),
+		"lng": packet.get("lng"),
+		"battery": packet.get("battery"),
+		"hops": packet.get("hops"),
+		"last_seen": time.time()
+	}
+
+
+# =====================================================================
+# DISPLAY NODES
+# ====================================================================
+
+
+def display_nodes():
+
+	print("\n === ACTIVE NODES ===")
+
+	for rover_id, info in nodes.items():
+		age = time.time() - info["last_seen"]
+
+		print(
+			f"{rover_id} | "
+			f"LAT: {info['lat']} "
+			f"LNG: {info['lng']}"
+			f"HOPS: {info['hops']} "
+			f"AGE:{age:.1f}s"
+		)
+
+	print("==========================")
+
+
+
+# =====================================================================
+# OFFLINE DETECTION
+# ====================================================================
+
+
+def check_timeouts():
+
+	for rover_id, info in nodes.items():
+		age = time.time() - info["last_unseen"]
+
+		if age > 30:
+			print(f"[OFFLINE] {rover_id} last seen {age:.0f}s ago")
+
+
 # =====================================================================
 # STARTUP
 # ====================================================================
@@ -235,6 +295,11 @@ while True:
 				print("-----------------------")
 
 
+				update_node(packet)
+				display_nodes()
+				check_timeouts()
+
+
 			except Exception as e:
 				print("JSON Error:", e)
 				print("Raw JSON:", json_text)
@@ -253,7 +318,8 @@ while True:
 			if seq:
 				existing = db.execute(
 					"""
-					SELECT id
+			
+		SELECT id
 					FROM packets
 					WHERE seq = ?
 					""",
