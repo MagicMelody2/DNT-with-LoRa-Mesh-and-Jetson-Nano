@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Live LoRa Mesh Tracker</title>
+  <style>
+    html, body { 
+      height: 100%; 
+      margin: 0; 
+      padding: 0; 
+      font-family: sans-serif; 
+    }
+    
+    #map { 
+      height: 100%; 
+      width: 100%; 
+    }
+    
+    #status {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 12px 18px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      z-index: 5;
+      min-width: 200px;
+    }
+    
+    .time-text {
+      font-size: 11px;
+      color: #666;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="status">
+    <b style="font-size: 14px;">Tracker Status</b><br><br>
+    
+    <span style="color: blue; font-weight: bold;">Base Node:</span> <span id="base-status">Waiting...</span><br>
+    <div id="base-time" class="time-text" style="margin-bottom: 12px;">Last update: --</div>
+    
+    <div id="dynamic-rovers-list"></div>
+  </div>
+
+  <div id="map"></div>
+
+  <script>
+    const FIREBASE_URL = "https://battleship-a7d29-default-rtdb.firebaseio.com";
+
+    let map;
+    let baseMarker;
+    let isFirstLoad = true;
+    
+    // Dictionary to store and track an infinite number of rover markers
+    const activeRovers = {}; 
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 16,
+        center: { lat: 0, lng: 0 },
+        mapTypeId: 'roadmap' 
+      });
+
+      baseMarker = new google.maps.Marker({
+        map: map,
+        title: 'Base Node (Gateway)',
+        // Using a blue marker for the base to distinguish it from the red rovers
+        icon: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png' 
+      });
+      
+      fetchLocations();
+    }
+
+    function fetchLocations() {
+      // 1. Fetch the Base Node
+      fetch(FIREBASE_URL + '/nodes/base.json')
+        .then(response => response.json())
+        .then(data => {
+          if (data && data.lat && data.lng) {
+            const pos = { lat: data.lat, lng: data.lng };
+            baseMarker.setPosition(pos);
+            document.getElementById('base-status').innerText = "Live";
+            
+            if (data.time && data.time !== "N/A") {
+              // Using toLocaleString() to show both Date and Time
+              const localTime = new Date(data.time).toLocaleString();
+              document.getElementById('base-time').innerText = "Last update: " + localTime;
+            }
+
+            // Snap camera to Base Node only on the very first load
+            if (isFirstLoad) {
+              map.setCenter(pos);
+              isFirstLoad = false;
+            }
+          }
+        })
+        .catch(err => console.log("Base Node Error:", err));
+
+      // 2. Fetch ALL Rovers Dynamically
+      fetch(FIREBASE_URL + '/nodes/rovers.json')
+        .then(response => response.json())
+        .then(data => {
+          if (!data) return; // Exit if the database folder is empty
+
+          let roversHTML = ""; 
+
+          // Loop through every Rover ID found in the database
+          for (const roverId in data) {
+            const rData = data[roverId];
+            
+            // Ensure we have valid GPS coordinates before mapping
+            if (rData.lat && rData.lng) {
+              const pos = { lat: rData.lat, lng: rData.lng };
+
+              // If this is a brand new Rover we haven't seen yet, create a marker
+              if (!activeRovers[roverId]) {
+                activeRovers[roverId] = new google.maps.Marker({
+                  map: map,
+                  title: roverId,
+                  icon: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
+                });
+              }
+              
+              // Move the marker to the new coordinates
+              activeRovers[roverId].setPosition(pos);
+
+              // Format the timestamp
+              let timeText = "--";
+              if (rData.time && rData.time !== "N/A") {
+                timeText = new Date(rData.time).toLocaleString();
+              }
+
+              // Build the UI text block for this specific Rover
+              roversHTML += `
+                <span style="color: red; font-weight: bold;">${roverId}:</span> <span>Live</span><br>
+                <div class="time-text" style="margin-bottom: 8px;">Last update: ${timeText}</div>
+              `;
+            }
+          }
+
+          // Inject the finished list of all Rovers into the HTML box
+          document.getElementById('dynamic-rovers-list').innerHTML = roversHTML;
+        })
+        .catch(err => console.log("Rover Node Error:", err));
+        
+      // Repeat the whole process every 5 seconds
+      setTimeout(fetchLocations, 5000); 
+    }
+  </script>
+
+  <!-- At the bottom of the file: -->
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA1VZEVwJvz7Tux7WV5xcs45LcBvQvlu7k&callback=initMap"></script>
+
+</body>
+</html>
