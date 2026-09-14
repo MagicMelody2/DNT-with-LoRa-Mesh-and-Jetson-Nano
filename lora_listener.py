@@ -179,7 +179,7 @@ def delete_all_packets():
 # ====================================================================
 
 
-def update_node(data):
+def update_node(packet):
 
 	rover_id = packet.get("id")
 
@@ -210,7 +210,7 @@ def display_nodes():
 		print(
 			f"{rover_id} | "
 			f"LAT: {info['lat']} "
-			f"LNG: {info['lng']}"
+			f"LNG: {info['lng']} "
 			f"HOPS: {info['hops']} "
 			f"AGE:{age:.1f}s"
 		)
@@ -227,7 +227,7 @@ def display_nodes():
 def check_timeouts():
 
 	for rover_id, info in nodes.items():
-		age = time.time() - info["last_unseen"]
+		age = time.time() - info["last_seen"]
 
 		if age > 30:
 			print(f"[OFFLINE] {rover_id} last seen {age:.0f}s ago")
